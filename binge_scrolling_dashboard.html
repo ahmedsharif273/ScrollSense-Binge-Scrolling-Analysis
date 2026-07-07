@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Binge-Scrolling & Academic Impact</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0F1117;
+    --surface:#171A24;
+    --surface-alt:#1E2230;
+    --border:#2A2E3D;
+    --text:#ECEDF3;
+    --text-muted:#8890A6;
+    --risk:#FF4D6D;
+    --calm:#3DDC97;
+    --moderate:#FFC857;
+    --risk-dim: rgba(255,77,109,0.14);
+    --calm-dim: rgba(61,220,151,0.14);
+    --moderate-dim: rgba(255,200,87,0.14);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{ background:var(--risk); color:#0F1117; }
+
+  h1,h2,h3,.display{ font-family:'Space Grotesk',sans-serif; }
+  .mono{ font-family:'JetBrains Mono',monospace; }
+
+  /* ---- signature: scroll-progress rail (Instagram-story style) ---- */
+  #rail{
+    position:fixed; left:0; top:0; bottom:0; width:5px;
+    display:flex; flex-direction:column; z-index:50;
+    background:var(--surface);
+  }
+  .rail-seg{ flex:1; background:var(--border); position:relative; margin:1px 0; overflow:hidden; }
+  .rail-seg .fill{ position:absolute; left:0; top:0; width:100%; height:0%; background:var(--risk); transition:height .1s linear; }
+  #rail-label{
+    position:fixed; left:16px; top:50%; transform:translateY(-50%) rotate(180deg);
+    writing-mode:vertical-rl; font-family:'JetBrains Mono',monospace; font-size:11px;
+    letter-spacing:.15em; color:var(--text-muted); z-index:49; pointer-events:none;
+  }
+
+  .wrap{ max-width:1080px; margin:0 auto; padding:0 32px 0 56px; }
+
+  /* ---- hero ---- */
+  #hero{ min-height:92vh; display:flex; flex-direction:column; justify-content:center; padding-top:40px; }
+  .eyebrow{ font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:.18em; color:var(--risk); text-transform:uppercase; margin-bottom:18px; }
+  h1.title{ font-size:clamp(36px,5.2vw,64px); font-weight:600; line-height:1.06; letter-spacing:-0.01em; max-width:14ch; }
+  .title .accent{ color:var(--risk); }
+  .subtitle{ margin-top:22px; font-size:17px; color:var(--text-muted); max-width:56ch; }
+
+  .hero-stats{ display:flex; gap:48px; margin-top:56px; flex-wrap:wrap; }
+  .hstat .num{ font-family:'JetBrains Mono',monospace; font-size:40px; font-weight:700; color:var(--text); }
+  .hstat .lbl{ font-size:13px; color:var(--text-muted); margin-top:4px; max-width:18ch; }
+  .hstat.r .num{ color:var(--risk); }
+
+  /* ---- sections ---- */
+  section{ padding:88px 0; border-top:1px solid var(--border); }
+  .sec-head{ display:flex; align-items:baseline; gap:14px; margin-bottom:36px; }
+  .sec-num{ font-family:'JetBrains Mono',monospace; color:var(--text-muted); font-size:13px; }
+  h2.sec-title{ font-size:28px; font-weight:600; }
+  .sec-intro{ color:var(--text-muted); max-width:64ch; margin-bottom:36px; font-size:15px; }
+
+  .card{ background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:24px; }
+  .grid2{ display:grid; grid-template-columns:1.3fr 1fr; gap:20px; }
+  .grid3{ display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
+  @media(max-width:800px){ .grid2,.grid3{ grid-template-columns:1fr; } }
+
+  .chart-box{ position:relative; height:320px; }
+  .chart-box.tall{ height:380px; }
+  .chart-box.short{ height:220px; }
+  canvas{ max-width:100%; }
+
+  .card-title{ font-size:14px; font-weight:600; margin-bottom:2px; }
+  .card-sub{ font-size:12.5px; color:var(--text-muted); margin-bottom:16px; }
+
+  .stat-line{ display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border); font-size:14px; }
+  .stat-line:last-child{ border-bottom:none; }
+  .stat-line .val{ font-family:'JetBrains Mono',monospace; color:var(--risk); font-weight:600; }
+
+  /* filter pills */
+  .filters{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:24px; }
+  .pill{
+    font-family:'JetBrains Mono',monospace; font-size:12.5px; padding:7px 14px; border-radius:999px;
+    border:1px solid var(--border); color:var(--text-muted); cursor:pointer; background:transparent;
+    transition:all .15s;
+  }
+  .pill:hover{ border-color:var(--risk); color:var(--text); }
+  .pill.active{ background:var(--risk); border-color:var(--risk); color:#0F1117; font-weight:600; }
+
+  /* persona cards */
+  .persona-card{ border-radius:10px; padding:26px; border:1px solid var(--border); }
+  .persona-card.risk{ background:var(--risk-dim); border-color:rgba(255,77,109,0.35); }
+  .persona-card.moderate{ background:var(--moderate-dim); border-color:rgba(255,200,87,0.35); }
+  .persona-card.calm{ background:var(--calm-dim); border-color:rgba(61,220,151,0.35); }
+  .persona-card .pct{ font-family:'JetBrains Mono',monospace; font-size:34px; font-weight:700; }
+  .persona-card.risk .pct{ color:var(--risk); }
+  .persona-card.moderate .pct{ color:var(--moderate); }
+  .persona-card.calm .pct{ color:var(--calm); }
+  .persona-card .pname{ font-family:'Space Grotesk',sans-serif; font-size:19px; font-weight:600; margin:6px 0 12px; }
+  .persona-card .pdesc{ font-size:13px; color:var(--text-muted); line-height:1.6; }
+  .persona-card .pmini{ display:flex; gap:18px; margin-top:16px; font-size:12px; }
+  .persona-card .pmini b{ font-family:'JetBrains Mono',monospace; display:block; font-size:16px; color:var(--text); }
+
+  footer{ padding:60px 0 90px; border-top:1px solid var(--border); }
+  footer .cols{ display:grid; grid-template-columns:2fr 1fr; gap:40px; }
+  footer h3{ font-size:15px; margin-bottom:12px; }
+  footer p{ font-size:13.5px; color:var(--text-muted); max-width:56ch; }
+  footer .methods{ font-size:13px; color:var(--text-muted); }
+  footer .methods div{ margin-bottom:8px; }
+  @media(max-width:800px){ footer .cols{ grid-template-columns:1fr; } }
+
+  .legend-dot{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; }
+</style>
+</head>
+<body>
+
+<div id="rail"></div>
+<div id="rail-label">SCROLL PROGRESS</div>
+
+<div class="wrap">
+
+  <!-- HERO -->
+  <section id="hero" style="border-top:none;">
+    <div class="eyebrow">Behavioral analytics · n = 150 students</div>
+    <h1 class="title">Every scroll<br>leaves a <span class="accent">trace</span> on<br>the transcript.</h1>
+    <p class="subtitle">A survey-based study measuring compulsive social media scrolling among university students, and how strongly it links to procrastination, focus, and academic strain.</p>
+    <div class="hero-stats">
+      <div class="hstat r"><div class="num">0.78</div><div class="lbl">correlation between binge-scrolling and academic impact</div></div>
+      <div class="hstat"><div class="num">66</div><div class="lbl">of 150 students classified "at-risk"</div></div>
+      <div class="hstat"><div class="num">91%</div><div class="lbl">scroll on their phone before sleep</div></div>
+    </div>
+  </section>
+
+  <!-- METHOD -->
+  <section id="sec-method">
+    <div class="sec-head"><span class="sec-num">01</span><h2 class="sec-title">Building the measures</h2></div>
+    <p class="sec-intro">Two composite indices were constructed from the 24 Likert-scale items (1–5): a <b style="color:var(--text)">Binge-Scrolling Index</b> (12 items covering compulsive use and emotional aftermath) and an <b style="color:var(--text)">Academic Impact Index</b> (4 items on procrastination, study efficiency, focus, and anxiety). Reliability was checked before treating either as a single score.</p>
+    <div class="grid3">
+      <div class="card">
+        <div class="card-title">Binge-Scrolling Index</div>
+        <div class="card-sub">12 items · Cronbach's α</div>
+        <div class="mono" style="font-size:38px;font-weight:700;color:var(--risk)">0.885</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-top:8px">Excellent internal consistency</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Academic Impact Index</div>
+        <div class="card-sub">4 items · Cronbach's α</div>
+        <div class="mono" style="font-size:38px;font-weight:700;color:var(--moderate)">0.814</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-top:8px">Good internal consistency</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Pearson correlation</div>
+        <div class="card-sub">Binge Index × Academic Impact</div>
+        <div class="mono" style="font-size:38px;font-weight:700;color:var(--text)">r = .78</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-top:8px">p &lt; .001, n = 150</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CORRELATION -->
+  <section id="sec-corr">
+    <div class="sec-head"><span class="sec-num">02</span><h2 class="sec-title">The core relationship</h2></div>
+    <p class="sec-intro">Each point is one student. As the Binge-Scrolling Index rises, so does self-reported academic disruption — filter by persona to see how the three groups separate.</p>
+    <div class="card">
+      <div class="filters" id="scatter-filters">
+        <button class="pill active" data-f="All">All (150)</button>
+        <button class="pill" data-f="Low-Risk">Low-Risk (31)</button>
+        <button class="pill" data-f="Moderate">Moderate (53)</button>
+        <button class="pill" data-f="At-Risk">At-Risk (66)</button>
+      </div>
+      <div class="chart-box tall"><canvas id="scatterChart"></canvas></div>
+    </div>
+  </section>
+
+  <!-- ITEM PROFILE + HABITS -->
+  <section id="sec-items">
+    <div class="sec-head"><span class="sec-num">03</span><h2 class="sec-title">What the scrolling actually looks like</h2></div>
+    <p class="sec-intro">Mean agreement (1–5) across the 12 binge-scrolling items. "Scroll when alone" and "continuous scroll" score highest; "thinking about scrolling" while away from the app scores lowest.</p>
+    <div class="grid2">
+      <div class="card">
+        <div class="card-title">Item-level means</div>
+        <div class="card-sub">Ranked highest to lowest</div>
+        <div class="chart-box tall"><canvas id="itemChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Habitual context</div>
+        <div class="card-sub">Platform & pre-sleep use</div>
+        <div class="chart-box short"><canvas id="platformChart"></canvas></div>
+        <div style="margin-top:18px">
+          <div class="stat-line"><span>Scroll before sleep</span><span class="val">91%</span></div>
+          <div class="stat-line"><span>Instagram is top platform</span><span class="val">47%</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- GROUP COMPARISONS -->
+  <section id="sec-groups">
+    <div class="sec-head"><span class="sec-num">04</span><h2 class="sec-title">Who scrolls the most</h2></div>
+    <p class="sec-intro">Academic year produced the clearest split (ANOVA, p &lt; .001) — 3rd-years score highest, 1st-years lowest. Gender differences were also significant (p = .003); daily hours trended upward but didn't reach significance.</p>
+    <div class="grid3">
+      <div class="card">
+        <div class="card-title">By academic year</div>
+        <div class="card-sub mono">F = 6.49, p &lt; .001 **</div>
+        <div class="chart-box short"><canvas id="yearChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">By gender</div>
+        <div class="card-sub mono">t = -2.98, p = .003 **</div>
+        <div class="chart-box short"><canvas id="genderChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">By daily hours online</div>
+        <div class="card-sub mono">F = 1.99, p = .118</div>
+        <div class="chart-box short"><canvas id="hoursChart"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PERSONAS -->
+  <section id="sec-personas">
+    <div class="sec-head"><span class="sec-num">05</span><h2 class="sec-title">Three behavioral personas</h2></div>
+    <p class="sec-intro">K-means clustering on all 16 Likert items separates students into three distinct profiles — severity of scrolling behavior and academic strain move together.</p>
+    <div class="grid3">
+      <div class="persona-card calm">
+        <div class="pct">21%</div>
+        <div class="pname">Low-Risk</div>
+        <div class="pdesc">Scrolls with intent, rarely loses track of time, minimal guilt or academic drag.</div>
+        <div class="pmini">
+          <div><b>2.07</b>binge idx</div>
+          <div><b>1.91</b>academic idx</div>
+          <div><b>31</b>students</div>
+        </div>
+      </div>
+      <div class="persona-card moderate">
+        <div class="pct">35%</div>
+        <div class="pname">Moderate</div>
+        <div class="pdesc">Regular scroller with occasional guilt and mild procrastination — the largest swing group.</div>
+        <div class="pmini">
+          <div><b>3.07</b>binge idx</div>
+          <div><b>3.42</b>academic idx</div>
+          <div><b>53</b>students</div>
+        </div>
+      </div>
+      <div class="persona-card risk">
+        <div class="pct">44%</div>
+        <div class="pname">At-Risk</div>
+        <div class="pdesc">Compulsive, hard-to-control scrolling paired with the steepest academic and emotional cost.</div>
+        <div class="pmini">
+          <div><b>4.00</b>binge idx</div>
+          <div><b>4.04</b>academic idx</div>
+          <div><b>66</b>students</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="cols">
+      <div>
+        <h3>Reading the findings</h3>
+        <p>Nearly half of surveyed students fall into the "at-risk" persona, where compulsive scrolling tracks closely with procrastination and lost study focus. The strength of the correlation (r = .78) suggests binge-scrolling isn't just correlated with academic strain incidentally — it's one of the more consistent behavioral predictors in this sample. Academic year matters more than age or field of study, hinting the pattern builds over the course of a degree rather than being fixed by discipline.</p>
+      </div>
+      <div>
+        <h3>Method notes</h3>
+        <div class="methods">
+          <div>· n = 150, self-report survey</div>
+          <div>· 5-point Likert scale, 24 items</div>
+          <div>· Composite indices: item-mean</div>
+          <div>· K-means, k=3, standardized inputs</div>
+          <div>· ANOVA / t-tests for group comparisons</div>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+</div>
+
+<script id="data-payload" type="application/json">
+{"n": 150, "scatter": [{"Binge_Index": 3.75, "Academic_Impact_Index": 4.25, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 2.42, "Academic_Impact_Index": 2.25, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "2nd Year"}, {"Binge_Index": 4.0, "Academic_Impact_Index": 4.0, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 4.5, "Academic_Impact_Index": 2.5, "Persona": "At-Risk", "Gender": "female", "Academic_Year": "4th Year"}, {"Binge_Index": 3.33, "Academic_Impact_Index": 4.0, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 3.5, "Academic_Impact_Index": 3.75, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 2.75, "Academic_Impact_Index": 2.25, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 3.17, "Academic_Impact_Index": 4.75, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 2.67, "Academic_Impact_Index": 3.5, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 2.33, "Academic_Impact_Index": 2.5, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 2.75, "Academic_Impact_Index": 4.0, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 3.92, "Academic_Impact_Index": 3.75, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 2.92, "Academic_Impact_Index": 3.0, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 2.25, "Academic_Impact_Index": 4.25, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 3.17, "Academic_Impact_Index": 4.0, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 4.08, "Academic_Impact_Index": 1.5, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 3.0, "Academic_Impact_Index": 2.5, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.0, "Academic_Impact_Index": 4.0, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 4.42, "Academic_Impact_Index": 4.0, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "1st Year"}, {"Binge_Index": 3.0, "Academic_Impact_Index": 3.25, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "1st Year"}, {"Binge_Index": 4.75, "Academic_Impact_Index": 4.75, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "2nd Year"}, {"Binge_Index": 2.67, "Academic_Impact_Index": 2.25, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 2.75, "Academic_Impact_Index": 3.0, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "1st Year"}, {"Binge_Index": 1.17, "Academic_Impact_Index": 2.0, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "2nd Year"}, {"Binge_Index": 2.5, "Academic_Impact_Index": 1.75, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "2nd Year"}, {"Binge_Index": 4.5, "Academic_Impact_Index": 4.0, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 2.83, "Academic_Impact_Index": 3.0, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 4.67, "Academic_Impact_Index": 4.0, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 2.17, "Academic_Impact_Index": 2.75, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "2nd Year"}, {"Binge_Index": 3.17, "Academic_Impact_Index": 3.0, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 1.83, "Academic_Impact_Index": 1.75, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "2nd Year"}, {"Binge_Index": 3.0, "Academic_Impact_Index": 3.5, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "2nd Year"}, {"Binge_Index": 1.33, "Academic_Impact_Index": 1.0, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 2.5, "Academic_Impact_Index": 3.0, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "2nd Year"}, {"Binge_Index": 3.0, "Academic_Impact_Index": 3.0, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 3.75, "Academic_Impact_Index": 4.25, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "Masters"}, {"Binge_Index": 1.0, "Academic_Impact_Index": 1.25, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "1st Year"}, {"Binge_Index": 3.0, "Academic_Impact_Index": 1.25, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "1st Year"}, {"Binge_Index": 3.33, "Academic_Impact_Index": 3.0, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "Masters"}, {"Binge_Index": 2.25, "Academic_Impact_Index": 1.25, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "1st Year"}, {"Binge_Index": 3.08, "Academic_Impact_Index": 3.75, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "1st Year"}, {"Binge_Index": 1.92, "Academic_Impact_Index": 2.0, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "1st Year"}, {"Binge_Index": 4.83, "Academic_Impact_Index": 5.0, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.17, "Academic_Impact_Index": 3.25, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 1.08, "Academic_Impact_Index": 1.0, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "1st Year"}, {"Binge_Index": 3.0, "Academic_Impact_Index": 3.0, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.83, "Academic_Impact_Index": 4.5, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "2nd Year"}, {"Binge_Index": 1.33, "Academic_Impact_Index": 1.0, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 2.67, "Academic_Impact_Index": 2.0, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 4.42, "Academic_Impact_Index": 3.75, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 2.17, "Academic_Impact_Index": 2.0, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 1.83, "Academic_Impact_Index": 2.0, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "1st Year"}, {"Binge_Index": 2.75, "Academic_Impact_Index": 4.75, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "1st Year"}, {"Binge_Index": 3.33, "Academic_Impact_Index": 4.5, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "2nd Year"}, {"Binge_Index": 2.67, "Academic_Impact_Index": 2.25, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "Masters"}, {"Binge_Index": 2.92, "Academic_Impact_Index": 3.25, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "2nd Year"}, {"Binge_Index": 2.67, "Academic_Impact_Index": 3.0, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "1st Year"}, {"Binge_Index": 2.42, "Academic_Impact_Index": 1.0, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "2nd Year"}, {"Binge_Index": 4.17, "Academic_Impact_Index": 3.25, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 3.0, "Academic_Impact_Index": 3.0, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "1st Year"}, {"Binge_Index": 3.08, "Academic_Impact_Index": 3.5, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "2nd Year"}, {"Binge_Index": 2.08, "Academic_Impact_Index": 2.25, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "1st Year"}, {"Binge_Index": 3.08, "Academic_Impact_Index": 3.0, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 3.08, "Academic_Impact_Index": 3.0, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 4.33, "Academic_Impact_Index": 3.75, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 3.42, "Academic_Impact_Index": 4.0, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "2nd Year"}, {"Binge_Index": 2.17, "Academic_Impact_Index": 2.0, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "1st Year"}, {"Binge_Index": 2.25, "Academic_Impact_Index": 2.0, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "2nd Year"}, {"Binge_Index": 3.0, "Academic_Impact_Index": 3.0, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 3.5, "Academic_Impact_Index": 4.75, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 2.33, "Academic_Impact_Index": 2.25, "Persona": "Low-Risk", "Gender": "female", "Academic_Year": "4th Year"}, {"Binge_Index": 2.67, "Academic_Impact_Index": 3.5, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "1st Year"}, {"Binge_Index": 3.08, "Academic_Impact_Index": 3.5, "Persona": "Moderate", "Gender": "Prefer not to say", "Academic_Year": "1st Year"}, {"Binge_Index": 3.08, "Academic_Impact_Index": 3.5, "Persona": "Moderate", "Gender": "female", "Academic_Year": "4th Year"}, {"Binge_Index": 1.42, "Academic_Impact_Index": 1.75, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 2.33, "Academic_Impact_Index": 2.5, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 4.17, "Academic_Impact_Index": 3.75, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 2.0, "Academic_Impact_Index": 2.0, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "Masters"}, {"Binge_Index": 3.0, "Academic_Impact_Index": 3.0, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 2.58, "Academic_Impact_Index": 2.5, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 3.83, "Academic_Impact_Index": 4.5, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "Masters"}, {"Binge_Index": 5.0, "Academic_Impact_Index": 5.0, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.75, "Academic_Impact_Index": 4.25, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 4.42, "Academic_Impact_Index": 4.25, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.67, "Academic_Impact_Index": 4.0, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 4.33, "Academic_Impact_Index": 4.25, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.83, "Academic_Impact_Index": 3.75, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 2.08, "Academic_Impact_Index": 3.0, "Persona": "Low-Risk", "Gender": "female", "Academic_Year": "2nd Year"}, {"Binge_Index": 1.0, "Academic_Impact_Index": 1.0, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "Masters"}, {"Binge_Index": 4.25, "Academic_Impact_Index": 3.5, "Persona": "At-Risk", "Gender": "female", "Academic_Year": "4th Year"}, {"Binge_Index": 3.92, "Academic_Impact_Index": 3.75, "Persona": "At-Risk", "Gender": "female", "Academic_Year": "4th Year"}, {"Binge_Index": 3.83, "Academic_Impact_Index": 4.5, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 3.0, "Academic_Impact_Index": 3.0, "Persona": "Moderate", "Gender": "female", "Academic_Year": "4th Year"}, {"Binge_Index": 3.5, "Academic_Impact_Index": 3.25, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "2nd Year"}, {"Binge_Index": 3.17, "Academic_Impact_Index": 3.0, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "1st Year"}, {"Binge_Index": 3.33, "Academic_Impact_Index": 3.25, "Persona": "Moderate", "Gender": "female", "Academic_Year": "3rd Year"}, {"Binge_Index": 2.5, "Academic_Impact_Index": 2.5, "Persona": "Low-Risk", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 3.33, "Academic_Impact_Index": 3.75, "Persona": "Moderate", "Gender": "female", "Academic_Year": "3rd Year"}, {"Binge_Index": 4.25, "Academic_Impact_Index": 4.75, "Persona": "At-Risk", "Gender": "female", "Academic_Year": "2nd Year"}, {"Binge_Index": 3.75, "Academic_Impact_Index": 4.0, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.75, "Academic_Impact_Index": 3.75, "Persona": "At-Risk", "Gender": "female", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.58, "Academic_Impact_Index": 3.75, "Persona": "At-Risk", "Gender": "female", "Academic_Year": "2nd Year"}, {"Binge_Index": 3.5, "Academic_Impact_Index": 3.5, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 4.17, "Academic_Impact_Index": 4.0, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.75, "Academic_Impact_Index": 4.0, "Persona": "At-Risk", "Gender": "female", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.92, "Academic_Impact_Index": 4.5, "Persona": "At-Risk", "Gender": "female", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.33, "Academic_Impact_Index": 3.5, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.5, "Academic_Impact_Index": 4.25, "Persona": "At-Risk", "Gender": "female", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.5, "Academic_Impact_Index": 3.5, "Persona": "Moderate", "Gender": "female", "Academic_Year": "4th Year"}, {"Binge_Index": 2.58, "Academic_Impact_Index": 2.75, "Persona": "Moderate", "Gender": "female", "Academic_Year": "4th Year"}, {"Binge_Index": 2.83, "Academic_Impact_Index": 3.25, "Persona": "Moderate", "Gender": "female", "Academic_Year": "4th Year"}, {"Binge_Index": 4.17, "Academic_Impact_Index": 3.75, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.5, "Academic_Impact_Index": 3.25, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.42, "Academic_Impact_Index": 4.0, "Persona": "Moderate", "Gender": "female", "Academic_Year": "3rd Year"}, {"Binge_Index": 4.25, "Academic_Impact_Index": 4.5, "Persona": "At-Risk", "Gender": "Prefer not to say", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.83, "Academic_Impact_Index": 3.5, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.17, "Academic_Impact_Index": 3.25, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "Masters"}, {"Binge_Index": 3.92, "Academic_Impact_Index": 4.0, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 2.92, "Academic_Impact_Index": 2.75, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.83, "Academic_Impact_Index": 4.0, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "4th Year"}, {"Binge_Index": 3.67, "Academic_Impact_Index": 3.75, "Persona": "At-Risk", "Gender": "Prefer not to say", "Academic_Year": "4th Year"}, {"Binge_Index": 3.58, "Academic_Impact_Index": 3.75, "Persona": "At-Risk", "Gender": "female", "Academic_Year": "4th Year"}, {"Binge_Index": 3.58, "Academic_Impact_Index": 3.75, "Persona": "At-Risk", "Gender": "female", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.67, "Academic_Impact_Index": 3.75, "Persona": "At-Risk", "Gender": "female", "Academic_Year": "4th Year"}, {"Binge_Index": 4.0, "Academic_Impact_Index": 4.75, "Persona": "At-Risk", "Gender": "female", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.58, "Academic_Impact_Index": 4.25, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.83, "Academic_Impact_Index": 3.75, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 4.25, "Academic_Impact_Index": 4.0, "Persona": "At-Risk", "Gender": "female", "Academic_Year": "1st Year"}, {"Binge_Index": 4.08, "Academic_Impact_Index": 4.5, "Persona": "At-Risk", "Gender": "female", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.67, "Academic_Impact_Index": 4.25, "Persona": "At-Risk", "Gender": "female", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.92, "Academic_Impact_Index": 5.0, "Persona": "At-Risk", "Gender": "female", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.92, "Academic_Impact_Index": 3.75, "Persona": "At-Risk", "Gender": "female", "Academic_Year": "3rd Year"}, {"Binge_Index": 4.25, "Academic_Impact_Index": 4.0, "Persona": "At-Risk", "Gender": "female", "Academic_Year": "1st Year"}, {"Binge_Index": 3.92, "Academic_Impact_Index": 4.25, "Persona": "At-Risk", "Gender": "female", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.75, "Academic_Impact_Index": 4.0, "Persona": "At-Risk", "Gender": "female", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.42, "Academic_Impact_Index": 4.25, "Persona": "At-Risk", "Gender": "female", "Academic_Year": "3rd Year"}, {"Binge_Index": 4.0, "Academic_Impact_Index": 3.5, "Persona": "At-Risk", "Gender": "female", "Academic_Year": "3rd Year"}, {"Binge_Index": 4.42, "Academic_Impact_Index": 4.5, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 2.92, "Academic_Impact_Index": 3.25, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 4.0, "Academic_Impact_Index": 4.0, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.92, "Academic_Impact_Index": 4.0, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 4.33, "Academic_Impact_Index": 4.25, "Persona": "At-Risk", "Gender": "female", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.5, "Academic_Impact_Index": 4.25, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 4.33, "Academic_Impact_Index": 3.75, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 4.08, "Academic_Impact_Index": 4.75, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "2nd Year"}, {"Binge_Index": 3.75, "Academic_Impact_Index": 3.75, "Persona": "At-Risk", "Gender": "Male", "Academic_Year": "2nd Year"}, {"Binge_Index": 3.5, "Academic_Impact_Index": 4.5, "Persona": "Moderate", "Gender": "female", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.08, "Academic_Impact_Index": 3.75, "Persona": "Moderate", "Gender": "Male", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.42, "Academic_Impact_Index": 3.25, "Persona": "Moderate", "Gender": "female", "Academic_Year": "3rd Year"}, {"Binge_Index": 3.42, "Academic_Impact_Index": 3.25, "Persona": "Moderate", "Gender": "female", "Academic_Year": "3rd Year"}], "alpha_binge": 0.885, "alpha_academic": 0.814, "correlation_r": 0.778, "correlation_p": 0.0, "by_academic_year": {"1st Year": 2.72, "2nd Year": 2.99, "3rd Year": 3.6, "4th Year": 3.28, "Masters": 2.82}, "by_gender": {"Male": 3.15, "Prefer not to say": 3.67, "female": 3.61}, "by_daily_hours": {"1\u20132 hours": 2.88, "2\u20133 hours": 3.25, "3\u20134 hours": 3.36, "More than 4 hours": 3.41}, "persona_counts": {"At-Risk": 66, "Moderate": 53, "Low-Risk": 31}, "persona_means": {"At-Risk": {"binge": 4.0, "academic": 4.04}, "Low-Risk": {"binge": 2.07, "academic": 1.91}, "Moderate": {"binge": 3.07, "academic": 3.42}}, "platform_counts": {"Instagram": 70, "Facebook": 56, "YouTube Shorts": 16, "Other": 4, "X (Twitter)": 2, "TikTok": 2}, "field_counts": {"Computer Science / IT": 89, "Engineering": 37, "Business / Management": 13, "Other": 8, "Science": 2, "Arts / Humanities": 1}, "use_before_sleep": {"Yes": 137, "No": 13}, "item_means": {"Continuous scroll": 3.54, "Scroll until bored": 3.36, "Scroll no purpose": 3.51, "Scroll when alone": 3.73, "Physically uncomfortable": 3.18, "Feel guilty": 3.37, "Feel depressed": 3.13, "Mad at self": 3.11, "Struggle to control": 3.15, "Thinking about scrolling": 2.73, "Scroll more than planned": 3.36, "Cannot stop self": 3.11}}
+</script>
+
+<script>
+const DATA = JSON.parse(document.getElementById('data-payload').textContent);
+
+Chart.defaults.color = '#8890A6';
+Chart.defaults.font.family = "'Inter', sans-serif";
+Chart.defaults.borderColor = '#2A2E3D';
+
+const COLORS = { risk:'#FF4D6D', moderate:'#FFC857', calm:'#3DDC97', text:'#ECEDF3', muted:'#8890A6' };
+function personaColor(p){ return p==='At-Risk'?COLORS.risk : p==='Moderate'?COLORS.moderate : COLORS.calm; }
+
+/* ---------- Scatter ---------- */
+const scatterCtx = document.getElementById('scatterChart').getContext('2d');
+function buildScatterDatasets(filter){
+  const personas = ['Low-Risk','Moderate','At-Risk'];
+  return personas.filter(p=>filter==='All'||filter===p).map(p=>({
+    label:p,
+    data: DATA.scatter.filter(d=>d.Persona===p).map(d=>({x:d.Binge_Index,y:d.Academic_Impact_Index})),
+    backgroundColor: personaColor(p) + 'cc',
+    pointRadius:5, pointHoverRadius:7
+  }));
+}
+const scatterChart = new Chart(scatterCtx,{
+  type:'scatter',
+  data:{ datasets: buildScatterDatasets('All') },
+  options:{
+    responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{ position:'top', labels:{ usePointStyle:true, boxWidth:8 } } },
+    scales:{
+      x:{ title:{display:true,text:'Binge-Scrolling Index'}, min:1, max:5, grid:{color:'#1E2230'} },
+      y:{ title:{display:true,text:'Academic Impact Index'}, min:1, max:5, grid:{color:'#1E2230'} }
+    }
+  }
+});
+document.querySelectorAll('#scatter-filters .pill').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('#scatter-filters .pill').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    scatterChart.data.datasets = buildScatterDatasets(btn.dataset.f);
+    scatterChart.update();
+  });
+});
+
+/* ---------- Item means ---------- */
+const items = Object.entries(DATA.item_means).sort((a,b)=>b[1]-a[1]);
+new Chart(document.getElementById('itemChart'),{
+  type:'bar',
+  data:{
+    labels: items.map(i=>i[0]),
+    datasets:[{ data: items.map(i=>i[1]), backgroundColor:'#FF4D6D', borderRadius:4 }]
+  },
+  options:{
+    indexAxis:'y', responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{display:false} },
+    scales:{ x:{ min:0,max:5, grid:{color:'#1E2230'} }, y:{ grid:{display:false} } }
+  }
+});
+
+/* ---------- Platform donut ---------- */
+const plat = Object.entries(DATA.platform_counts);
+new Chart(document.getElementById('platformChart'),{
+  type:'doughnut',
+  data:{
+    labels: plat.map(p=>p[0]),
+    datasets:[{ data: plat.map(p=>p[1]), backgroundColor:['#FF4D6D','#FFC857','#3DDC97','#6E7AF7','#8890A6','#4C5265'], borderColor:'#171A24', borderWidth:2 }]
+  },
+  options:{
+    responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{ position:'right', labels:{ boxWidth:8, font:{size:11} } } }
+  }
+});
+
+/* ---------- Group bars ---------- */
+function barChart(id, labels, values, color){
+  new Chart(document.getElementById(id),{
+    type:'bar',
+    data:{ labels, datasets:[{ data:values, backgroundColor:color, borderRadius:5 }] },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false} },
+      scales:{ y:{ min:0,max:5, grid:{color:'#1E2230'} }, x:{ grid:{display:false}, ticks:{font:{size:10.5}} } }
+    }
+  });
+}
+barChart('yearChart', Object.keys(DATA.by_academic_year), Object.values(DATA.by_academic_year), '#FF4D6D');
+barChart('genderChart', Object.keys(DATA.by_gender), Object.values(DATA.by_gender), '#FFC857');
+barChart('hoursChart', Object.keys(DATA.by_daily_hours), Object.values(DATA.by_daily_hours), '#3DDC97');
+
+/* ---------- Scroll-progress rail (signature element) ---------- */
+const sections = Array.from(document.querySelectorAll('section'));
+const rail = document.getElementById('rail');
+sections.forEach(()=>{
+  const seg = document.createElement('div');
+  seg.className='rail-seg';
+  const fill = document.createElement('div');
+  fill.className='fill';
+  seg.appendChild(fill);
+  rail.appendChild(seg);
+});
+const segs = rail.querySelectorAll('.rail-seg .fill');
+function updateRail(){
+  const scrollY = window.scrollY;
+  const vh = window.innerHeight;
+  sections.forEach((sec,i)=>{
+    const rect = sec.getBoundingClientRect();
+    const secTop = rect.top + scrollY;
+    const secH = rect.height;
+    let progress = (scrollY + vh*0.5 - secTop) / secH;
+    progress = Math.max(0, Math.min(1, progress));
+    segs[i].style.height = (progress*100) + '%';
+  });
+}
+window.addEventListener('scroll', updateRail, {passive:true});
+window.addEventListener('resize', updateRail);
+updateRail();
+</script>
+
+</body>
+</html>
